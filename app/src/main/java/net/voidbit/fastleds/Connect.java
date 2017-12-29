@@ -23,6 +23,7 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.Switch;
+import android.widget.SeekBar;
 import org.json.*;
 import com.flask.colorpicker.ColorPickerView;
 import com.flask.colorpicker.OnColorChangedListener;
@@ -208,17 +209,16 @@ public class Connect extends AppCompatActivity {
 
     public void parseAll(JSONObject data) {
         int color=0;
-        float alpha =0;
+        int alpha=0;
         int patternIndex=0;
         int paletteIndex=0;
         patterns.clear();
         palettes.clear();
-        disable=true;
         try {
             jsonToArrayList(data.getJSONArray("patterns"), patterns);
             jsonToArrayList(data.getJSONArray("palettes"), palettes);
-            patternIndex=data.getJSONObject("pattern").getInt("index");
-            paletteIndex=data.getJSONObject("palette").getInt("index");
+            patternIndex=data.getJSONObject("currentPattern").getInt("index");
+            paletteIndex=data.getJSONObject("currentPalette").getInt("index");
             color=65536*data.getJSONObject("solidColor").getInt("r");
             color+=256*data.getJSONObject("solidColor").getInt("g");
             color+=data.getJSONObject("solidColor").getInt("b");
@@ -232,21 +232,21 @@ public class Connect extends AppCompatActivity {
 
         ColorPickerView colorPickerView = findViewById(R.id.color_picker_view);
         colorPickerView.setColor(color,false);
-        colorPickerView.setAlphaValue(alpha/255);
+        colorPickerView.setAlphaValue(1);
 
         ArrayAdapter<String> patternsAdapter = new ArrayAdapter<>(this,
                 R.layout.spinner_item, patterns);
         patternsAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         Spinner patternS = findViewById(R.id.pattern);
-        patternS.setSelection(patternIndex);
         patternS.setAdapter(patternsAdapter);
+        patternS.setSelection(patternIndex);
 
         ArrayAdapter<String> palettesAdapter = new ArrayAdapter<>(this,
                 R.layout.spinner_item, palettes);
         palettesAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         Spinner paletteS = findViewById(R.id.palette);
-        paletteS.setSelection(paletteIndex);
         paletteS.setAdapter(palettesAdapter);
+        paletteS.setSelection(paletteIndex);
 
         paletteS.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
@@ -265,6 +265,28 @@ public class Connect extends AppCompatActivity {
             public void onNothingSelected(AdapterView<?> adapterView) {}
         });
 
+        SeekBar brightness = findViewById(R.id.seekBarBrightness);
+        //brightness.setMin(0);
+        brightness.setMax(255);
+        brightness.setProgress(alpha);
+        brightness.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
+                if (!disable) postValue("brightness",i);
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+
+            }
+        });
+
+
         Toast.makeText(Connect.this, R.string.response_connected, Toast.LENGTH_SHORT).show();
         CountDownTimer timer = new CountDownTimer(1000,1000) {
             public void onTick(long millisUntilFinished) {
@@ -278,6 +300,7 @@ public class Connect extends AppCompatActivity {
 
 
      public void getAllData() throws JSONException{
+        disable=true;
         RestClient.get("all", null, new JsonHttpResponseHandler() {
             @Override
             public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
@@ -297,34 +320,41 @@ public class Connect extends AppCompatActivity {
     }//getAlldata
 
     public void postRGB(int r, int g, int b) {
+        disable =true;
         RequestParams params = new RequestParams();
         params.put("r", r);
         params.put("g", g);
         params.put("b", b);
+
+        //Toast.makeText(Connect.this, "r:"+r+" g:"+g+" b:"+b, Toast.LENGTH_SHORT).show();
+
         RestClient.post("solidColor", params, new JsonHttpResponseHandler() {
+
             @Override
             public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
                 //Log.e("postRGB","changed color :) ");
+                disable=false;
             }
             @Override
             public void onFailure(int code, Header[] header, Throwable e, JSONObject obj) {
                 //Log.e("postRGB","error.. "+code);
                 Toast.makeText(Connect.this, R.string.response_failed, Toast.LENGTH_SHORT).show();
+                disable=false;
             }
         });
     }
     public void postValue(final String url, int value) {
-        RequestParams params = new RequestParams();
-        params.put("value", value);
-        RestClient.post(url, params, new JsonHttpResponseHandler() {
+        disable=true;
+        RequestParams params = new RequestParams("value", value);
+        RestClient.post(url, params, new TextHttpResponseHandler() {
             @Override
-            public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
-                //Log.e("postValue","changed "+url+" to:"+value);
+            public void onFailure(int statusCode, Header[] headers, String responseString, Throwable throwable) {
+                disable=false;
             }
+
             @Override
-            public void onFailure(int code, Header[] header, Throwable e, JSONObject obj) {
-                //Log.e("postValue: "+url,"error.. "+code);
-                Toast.makeText(Connect.this, R.string.response_failed, Toast.LENGTH_SHORT).show();
+            public void onSuccess(int statusCode, Header[] headers, String responseString) {
+                disable=false;
             }
         });
     }
